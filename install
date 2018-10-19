@@ -3,20 +3,19 @@
 # Run this script inside <magento_root> folder.
 # Examples:
 #  1. Curl way
-#   curl -s https://raw.githubusercontent.com/swissup/scripts/master/code2vendor | bash
-#   curl -s https://raw.githubusercontent.com/swissup/scripts/master/code2vendor | bash -s - swissup/swissup.argento-m2-1.7.0.zip
+#   curl -s https://raw.githubusercontent.com/swissup/scripts/master/install | bash
+#   curl -s https://raw.githubusercontent.com/swissup/scripts/master/install | bash -s - swissup/swissup.argento-m2-1.7.0.zip
 #  2. Wget way
-#   wget https://raw.githubusercontent.com/swissup/scripts/master/code2vendor -qO - | bash
-#   wget https://raw.githubusercontent.com/swissup/scripts/master/code2vendor -qO - | bash -s - swissup/swissup.argento-m2-1.7.0.zip
+#   wget https://raw.githubusercontent.com/swissup/scripts/master/install -qO - | bash
+#   wget https://raw.githubusercontent.com/swissup/scripts/master/install -qO - | bash -s - swissup/swissup.argento-m2-1.7.0.zip
 #
 # The script will:
 #
-# 1. Unpack downloaded archive from `<magento_root>/swissup` into `vendor/swissup/artifacts`;
+# 1. Unpack archives from `<magento_root>/swissup` into `vendor/swissup/artifacts`;
 # 2. Move the modules that will be updated from `<magento_root>/app/code/Swissup` and
 #    `<magento_root>/app/design/Swissup` files into `<magento_root>/swissup/backup`;
-# 3. Configure composer artifacts and install the modules from
-#    `vendor/swissup/artifacts`;
-# 4. Move downloaded archive from `swissup` into `<magento_root>/swissup/installed` folder
+# 3. Configure composer artifacts and install the modules from `vendor/swissup/artifacts`;
+# 4. Move archive from `<magento_root>/swissup` into `<magento_root>/swissup/installed` folder
 
 set -o errexit
 set -o pipefail
@@ -123,7 +122,16 @@ else
     mkdir -p "swissup/installed/${now}"
     mv ${archives[*]} "swissup/installed/${now}"
 
-    echo "Done."
+    echo "Removing outdated static content files"
+    rm -rf pub/static/_requirejs var/view_preprocessed pub/static/frontend/ pub/static/adminhtml/ generated/code/ 2> /dev/null || true
+
+    mode=$(bin/magento deploy:mode:show)
+    if [[ "$mode" == *production* ]]; then
+        echo "Deploying static content for en_US locale"
+        bin/magento setup:static-content:deploy en_US
+        bin/magento setup:di:compile
+    fi
 fi
 
 bin/magento maintenance:disable
+echo "Done."
