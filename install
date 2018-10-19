@@ -4,10 +4,10 @@
 # Examples:
 #  1. Curl way
 #   curl -s https://raw.githubusercontent.com/swissup/scripts/master/install | bash
-#   curl -s https://raw.githubusercontent.com/swissup/scripts/master/install | bash -s - swissup/swissup.argento-m2-1.7.0.zip
+#   curl -s https://raw.githubusercontent.com/swissup/scripts/master/install | bash -s - -f swissup/swissup.argento-m2-1.7.0.zip
 #  2. Wget way
 #   wget https://raw.githubusercontent.com/swissup/scripts/master/install -qO - | bash
-#   wget https://raw.githubusercontent.com/swissup/scripts/master/install -qO - | bash -s - swissup/swissup.argento-m2-1.7.0.zip
+#   wget https://raw.githubusercontent.com/swissup/scripts/master/install -qO - | bash -s - -f swissup/swissup.argento-m2-1.7.0.zip
 #
 # The script will:
 #
@@ -35,6 +35,23 @@ if [[ ! -x "bin/magento" ]]; then
     exit 1
 fi
 
+while getopts ":f:d:l:" opt; do
+    case $opt in
+        f) file="$OPTARG"
+        ;;
+        d) deploy="$OPTARG"
+        ;;
+        l) locale="$OPTARG"
+        ;;
+        \?) echo "Supported options:"
+            echo " -f filepath      -- path to archive"
+            echo " -d false         -- do not run deploy and compilation (for production only)"
+            echo " -l 'en_US en_GB' -- locales to use for deploy command"
+            exit 1
+        ;;
+    esac
+done
+
 now=$(date '+%d-%m-%Y_%H-%M-%S')
 
 ## prepare directories
@@ -52,7 +69,7 @@ for archive in swissup/*.zip; do
     [ -e "$archive" ] || continue
 
     ## skip archive if another one was requested in arguments
-    if [[ ! -z "$1" && "$1" != "$archive" ]]; then
+    if [[ ! -z "$file" && "$file" != "$archive" ]]; then
         continue
     fi
 
@@ -125,12 +142,19 @@ else
     echo "Removing outdated static content files"
     rm -rf pub/static/_requirejs var/view_preprocessed pub/static/frontend/ pub/static/adminhtml/ generated/code/ 2> /dev/null || true
 
-    mode=$(bin/magento deploy:mode:show)
-    if [[ "$mode" == *production* ]]; then
-        echo "Deploying static content for en_US locale"
-        bin/magento setup:static-content:deploy en_US
-        bin/magento setup:di:compile
+    if [[ -z "$deploy" || "$deploy" == "true" ]]; then
+        mode=$(bin/magento deploy:mode:show)
+        if [[ "$mode" == *production* ]]; then
+            echo "Deploying static content"
+            if [[ -z "$locale" ]]; then
+                bin/magento setup:static-content:deploy en_US
+            else
+                bin/magento setup:static-content:deploy $locale
+            fi
+            bin/magento setup:di:compile
+        fi
     fi
+
 fi
 
 bin/magento maintenance:disable
