@@ -1,0 +1,129 @@
+#!/usr/bin/env bash
+#
+# Run this script inside <magento_root> folder.
+# Examples:
+#  1. Curl way
+#   curl -s https://raw.githubusercontent.com/swissup/scripts/master/code2vendor | bash
+#   curl -s https://raw.githubusercontent.com/swissup/scripts/master/code2vendor | bash -s - swissup/swissup.argento-m2-1.7.0.zip
+#  2. Wget way
+#   wget https://raw.githubusercontent.com/swissup/scripts/master/code2vendor -qO - | bash
+#   wget https://raw.githubusercontent.com/swissup/scripts/master/code2vendor -qO - | bash -s - swissup/swissup.argento-m2-1.7.0.zip
+#
+# The script will:
+#
+# 1. Unpack downloaded archive from `<magento_root>/swissup` into `vendor/swissup/artifacts`;
+# 2. Move the modules that will be updated from `<magento_root>/app/code/Swissup` and
+#    `<magento_root>/app/design/Swissup` files into `<magento_root>/swissup/backup`;
+# 3. Configure composer artifacts and install the modules from
+#    `vendor/swissup/artifacts`;
+# 4. Move downloaded archive from `swissup` into `<magento_root>/swissup/migrated` folder
+
+set -o errexit
+set -o pipefail
+
+if [ ! -d "$(pwd)/vendor" ]; then
+    echo "Vendor directory is not found. Are you in MAGENTO_ROOT folder?"
+    exit 1
+fi
+
+if ! which composer >/dev/null; then
+    echo "Composer command not found. Make sure you can use 'composer' in terminal."
+    exit 1
+fi
+
+if [[ ! -x "bin/magento" ]]; then
+    echo "bin/magento command not found. Make sure you can use 'bin/magento' in terminal."
+    exit 1
+fi
+
+now=$(date '+%d-%m-%Y_%H-%M-%S')
+
+## prepare directories
+mkdir -p "vendor/swissup/artifacts"
+mkdir -p "swissup/backup"
+mkdir -p "swissup/migrated"
+
+archives=()
+packages=()
+codes=()
+
+bin/magento maintenance:enable
+
+for archive in swissup/*.zip; do
+    [ -e "$archive" ] || continue
+
+    ## skip archive if another one was requested in arguments
+    if [[ ! -z "$1" && "$1" != "$archive" ]]; then
+        continue
+    fi
+
+    ## skip invalidly formatted archives
+    if [[ "$archive" != swissup/swissup.* ]]; then
+        continue
+    fi
+
+    echo "Unzipping $archive into vendor/swissup/artifacts"
+    unzip -oqq "$archive" -d "vendor/swissup/artifacts"
+
+    ## move old files from app/code and app/design to the swissup/backup
+    modules=($(unzip -Z1 "$archive" | tr "\n" " "))
+    for module in "${modules[@]}"; do
+        path="app"
+
+        module="${module%-*}" # remove "-version.zip" suffix
+
+        if [[ "$module" == module-* ]]; then
+            path+="/code"
+            module="${module#module-}" # remove "module-" prefix
+            module="$(echo "$module" | sed -r 's/(^|-)(\w)/\U\2/g' )" # camelcase
+            codes+=("Swissup_${module}")
+        elif [[ "$module" == theme-frontend-* ]]; then
+            path+="/design/frontend"
+            module="${module#theme-frontend-}"  # remove "theme-frontend" prefix
+        else
+            continue
+        fi
+
+        path+="/Swissup"
+
+        from="${path}/${module}"
+        to="swissup/backup/${now}/${path}"
+
+        if [ -d "$(pwd)/${from}" ]; then
+            echo "  Moving ${from} into ${to}"
+            rm -rf "${to}"
+            mkdir -p "${to}"
+            mv "${from}" "${to}"
+        fi
+    done
+
+    ## generate package name to install
+    package="${archive%-*}"   # remove "-version.zip" suffix
+    package="${package#*/}"   # remove "swissup/" subfolder
+    package="${package/./\/}" # replace dot with slash to get proper package name
+
+    packages+=("$package")
+    archives+=("$archive")
+done
+
+if [ "${#packages[@]}" -eq 0 ]; then
+    echo "Nothing to migrate."
+else
+    echo "Installing packages via composer command from artifacts directory"
+    composer config repositories.swissupartifacts artifact "$(pwd)/vendor/swissup/artifacts"
+    echo "  composer require ${packages[*]}"
+    composer require ${packages[*]}
+
+    echo "Enable modules"
+    bin/magento module:enable ${codes[*]}
+    bin/magento setup:upgrade
+
+    ## move archives into "migrated" folder
+    echo "Moving arhives into 'swissup/migrated' folder"
+    mkdir -p "swissup/migrated/${now}"
+    mv ${archives[*]} "swissup/migrated/${now}"
+
+    echo "Done."
+fi
+
+bin/magento maintenance:disable
