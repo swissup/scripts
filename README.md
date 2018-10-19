@@ -9,7 +9,7 @@ Easy way to install the module downloaded from the one of our sites.
 > installation.
 
  1. Get the new zip archive(s) for the module(s) you'd like to update
- 2. Upload archives into the `<magento_root>/swissup` folder
+ 2. Upload archives into the `<magento_root>/swissup` folder. **Do not unpack!**
  3. Run the command below from `<magento_root>` folder
 
     ```bash

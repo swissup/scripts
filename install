@@ -154,7 +154,6 @@ else
             bin/magento setup:di:compile
         fi
     fi
-
 fi
 
 bin/magento maintenance:disable
