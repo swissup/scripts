@@ -16,7 +16,7 @@
 #    `<magento_root>/app/design/Swissup` files into `<magento_root>/swissup/backup`;
 # 3. Configure composer artifacts and install the modules from
 #    `vendor/swissup/artifacts`;
-# 4. Move downloaded archive from `swissup` into `<magento_root>/swissup/migrated` folder
+# 4. Move downloaded archive from `swissup` into `<magento_root>/swissup/installed` folder
 
 set -o errexit
 set -o pipefail
@@ -41,7 +41,7 @@ now=$(date '+%d-%m-%Y_%H-%M-%S')
 ## prepare directories
 mkdir -p "vendor/swissup/artifacts"
 mkdir -p "swissup/backup"
-mkdir -p "swissup/migrated"
+mkdir -p "swissup/installed"
 
 archives=()
 packages=()
@@ -118,10 +118,10 @@ else
     bin/magento module:enable ${codes[*]}
     bin/magento setup:upgrade
 
-    ## move archives into "migrated" folder
-    echo "Moving arhives into 'swissup/migrated' folder"
-    mkdir -p "swissup/migrated/${now}"
-    mv ${archives[*]} "swissup/migrated/${now}"
+    ## move archives into "installed" folder
+    echo "Moving arhives into 'swissup/installed' folder"
+    mkdir -p "swissup/installed/${now}"
+    mv ${archives[*]} "swissup/installed/${now}"
 
     echo "Done."
 fi
