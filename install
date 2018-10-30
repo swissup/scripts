@@ -25,12 +25,65 @@ if [ ! -d "$(pwd)/vendor" ]; then
     exit 1
 fi
 
-if ! which composer >/dev/null; then
+if ! which unzip >/dev/null; then
+    echo "Unzip command not found. Make sure you can use 'unzip' in terminal."
+    exit 1
+fi
+
+function get_php_path {
+    php_cmd=''
+    php_cmds=(
+        /usr/bin/php7.1
+        /usr/bin/php7.0
+        php
+    )
+
+    for path in "${php_cmds[@]}"; do
+        if [ -x "$(command -v ${path})" ]; then
+            php_cmd=$path
+            break;
+        fi
+    done
+
+    echo $php_cmd
+}
+
+## composer
+composer_cmd=''
+if which composer >/dev/null; then
+    composer_cmd="composer"
+else
+    if [ -f "$(pwd)/composer.phar" ]; then
+        php_cmd=$(get_php_path)
+        if [[ $php_cmd ]]; then
+            composer_cmd_prefixed="${php_cmd} composer.phar"
+            if $composer_cmd_prefixed >/dev/null; then
+                composer_cmd=$composer_cmd_prefixed
+            fi
+        fi
+    fi
+fi
+
+if [[ ! $composer_cmd ]]; then
     echo "Composer command not found. Make sure you can use 'composer' in terminal."
     exit 1
 fi
 
-if [[ ! -x "bin/magento" ]]; then
+## bin/magento
+magento_cmd=''
+if [[ -x "bin/magento" ]]; then
+    magento_cmd="bin/magento"
+else
+    php_cmd=$(get_php_path)
+    if [[ $php_cmd ]]; then
+        magento_cmd_prefixed="${php_cmd} bin/magento"
+        if $magento_cmd_prefixed >/dev/null; then
+            magento_cmd=$magento_cmd_prefixed
+        fi
+    fi
+fi
+
+if [[ ! $magento_cmd ]]; then
     echo "bin/magento command not found. Make sure you can use 'bin/magento' in terminal."
     exit 1
 fi
@@ -63,7 +116,7 @@ archives=()
 packages=()
 codes=()
 
-bin/magento maintenance:enable
+$magento_cmd maintenance:enable
 
 for archive in swissup/*.zip; do
     [ -e "$archive" ] || continue
@@ -116,7 +169,7 @@ for archive in swissup/*.zip; do
     ## generate package name to install
     package="${archive%-*}"   # remove "-version.zip" suffix
     package="${package#*/}"   # remove "swissup/" subfolder
-    package="${package/.//}"  # replace dot with slash to get proper package name
+    package="${package/.//}" # replace dot with slash to get proper package name
 
     packages+=("$package")
     archives+=("$archive")
@@ -126,13 +179,13 @@ if [ "${#packages[@]}" -eq 0 ]; then
     echo "Nothing to migrate."
 else
     echo "Installing packages via composer command from artifacts directory"
-    composer config repositories.swissupartifacts artifact "$(pwd)/vendor/swissup/artifacts"
-    echo "  composer require ${packages[*]}"
-    composer require ${packages[*]}
+    $composer_cmd config repositories.swissupartifacts artifact "$(pwd)/vendor/swissup/artifacts"
+    echo "  ${composer_cmd} require ${packages[*]}"
+    $composer_cmd require ${packages[*]}
 
     echo "Enable modules"
-    bin/magento module:enable ${codes[*]}
-    bin/magento setup:upgrade
+    $magento_cmd module:enable ${codes[*]}
+    $magento_cmd setup:upgrade
 
     ## move archives into "installed" folder
     echo "Moving arhives into 'swissup/installed' folder"
@@ -143,18 +196,18 @@ else
     rm -rf pub/static/_requirejs var/view_preprocessed pub/static/frontend/ pub/static/adminhtml/ generated/code/ 2> /dev/null || true
 
     if [[ -z "$deploy" || "$deploy" == "true" ]]; then
-        mode=$(bin/magento deploy:mode:show)
+        mode=$(${magento_cmd} deploy:mode:show)
         if [[ "$mode" == *production* ]]; then
             echo "Deploying static content"
             if [[ -z "$locale" ]]; then
-                bin/magento setup:static-content:deploy en_US
+                $magento_cmd setup:static-content:deploy en_US
             else
-                bin/magento setup:static-content:deploy $locale
+                $magento_cmd setup:static-content:deploy $locale
             fi
-            bin/magento setup:di:compile
+            $magento_cmd setup:di:compile
         fi
     fi
 fi
 
-bin/magento maintenance:disable
+$magento_cmd maintenance:disable
 echo "Done."
