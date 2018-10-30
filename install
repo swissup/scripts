@@ -116,7 +116,7 @@ for archive in swissup/*.zip; do
     ## generate package name to install
     package="${archive%-*}"   # remove "-version.zip" suffix
     package="${package#*/}"   # remove "swissup/" subfolder
-    package="${package/./\/}" # replace dot with slash to get proper package name
+    package="${package/.//}"  # replace dot with slash to get proper package name
 
     packages+=("$package")
     archives+=("$archive")
