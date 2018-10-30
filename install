@@ -176,7 +176,7 @@ for archive in swissup/*.zip; do
 done
 
 if [ "${#packages[@]}" -eq 0 ]; then
-    echo "Nothing to migrate."
+    echo "Nothing to install."
 else
     echo "Installing packages via composer command from artifacts directory"
     $composer_cmd config repositories.swissupartifacts artifact "$(pwd)/vendor/swissup/artifacts"
